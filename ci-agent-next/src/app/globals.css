@@ -1,0 +1,143 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #2b2bee;
+  --color-secondary: #2b2bee;
+  --color-accent-pink: #FF00E5;
+  --color-accent-blue: #00F5FF;
+  --color-accent-cyan: #06b6d4;
+  --color-accent-purple: #a855f7;
+  --color-background-dark: #050505;
+  --color-dashboard-bg: #020617;
+
+  --font-display: "Space Grotesk", sans-serif;
+
+  --animate-pulse: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-glow: glow 4s ease-in-out infinite;
+}
+
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-20px);
+  }
+}
+
+@keyframes glow {
+
+  0%,
+  100% {
+    opacity: 0.5;
+    filter: blur(120px);
+  }
+
+  50% {
+    opacity: 0.8;
+    filter: blur(140px);
+  }
+}
+
+@utility glass {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+}
+
+@utility glass-card {
+  background: rgba(255, 255, 255, 0.01);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+}
+
+@utility glass-panel {
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+@utility neon-border {
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    padding: 1px;
+    border-radius: 0.75rem;
+    background: linear-gradient(to bottom right, rgba(6, 182, 212, 0.3), rgba(43, 43, 238, 0.3), rgba(168, 85, 247, 0.3));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+}
+
+@utility bg-gradient-mesh {
+  background-color: #020617;
+  background-image:
+    radial-gradient(circle at 10% 10%, rgba(43, 43, 238, 0.15) 0%, transparent 40%),
+    radial-gradient(circle at 90% 10%, rgba(6, 182, 212, 0.15) 0%, transparent 40%),
+    radial-gradient(circle at 50% 90%, rgba(168, 85, 247, 0.15) 0%, transparent 40%),
+    radial-gradient(circle at 50% 50%, rgba(2, 6, 23, 1) 0%, rgba(2, 6, 23, 0.9) 100%);
+}
+
+@utility vibrant-active {
+  background: rgba(43, 43, 238, 0.15);
+  box-shadow: 0 0 20px rgba(43, 43, 238, 0.1);
+  border-left: 4px solid #2b2bee;
+}
+
+@utility vibrant-gradient {
+  background: linear-gradient(135deg, #f472b6 0%, #a855f7 50%, #2b2bee 100%);
+}
+
+@utility grid-overlay {
+  background-image: radial-gradient(circle at 1px 1px, rgba(43, 43, 238, 0.05) 1px, transparent 0);
+  background-size: 40px 40px;
+}
+
+@utility neon-glow {
+  box-shadow: 0 0 25px rgba(43, 43, 238, 0.4);
+}
+
+@utility text-glow {
+  text-shadow: 0 0 10px rgba(43, 43, 238, 0.5);
+}
+
+@utility gradient-btn {
+  background: linear-gradient(135deg, #FF00E5 0%, #2b2bee 100%);
+  transition: all 0.3s ease;
+
+  &:hover {
+    filter: brightness(1.2);
+    transform: scale(1.02);
+  }
+}
+
+@utility workflow-icon {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* Base styles */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background-dark text-slate-100 selection:bg-primary/30 min-h-screen relative overflow-x-hidden;
+    background: radial-gradient(circle at top left, #0a001a 0%, #050505 50%, #00001a 100%);
+  }
+}
