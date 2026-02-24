@@ -21,5 +21,6 @@ class Report(BaseModel):
     ai_summary: str
     severity: str  # low | medium | high
     notified: bool = False
+    read: bool = False
 
 
