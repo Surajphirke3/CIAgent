@@ -20,6 +20,7 @@ interface Report {
     ai_summary: string;
     severity: "low" | "medium" | "high";
     notified: boolean;
+    read: boolean;
 }
 
 // Convert a DB report into a "Live Signal" format
@@ -56,16 +57,23 @@ export default function SignalsPage() {
     const [activeFilter, setActiveFilter] = useState("All Signals");
     const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+    const [stats, setStats] = useState({ total: 0, high: 0, medium: 0, low: 0 });
     const filterCategories = ["All Signals", "Pricing", "Hiring", "Tech/IP", "M&A", "Launch", "Acquisition"];
 
     const loadSignals = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
-            const data = await apiFetch<Report[]>("/reports/");
+            const [data, statsData] = await Promise.all([
+                apiFetch<Report[]>("/reports/"),
+                apiFetch<{ total: number; high: number; medium: number; low: number }>("/reports/stats")
+            ]);
+
+            const unreadData = data.filter(r => !r.read);
             // Take up to 20 most recent reports for the signals feed
-            const mapped = data.slice(0, 20).map(reportToSignal);
+            const mapped = unreadData.slice(0, 20).map(reportToSignal);
             setSignals(mapped);
+            setStats(statsData);
         } catch (err) {
             setError(err instanceof ApiError ? err.message : "Failed to load signals");
         } finally {
@@ -75,10 +83,28 @@ export default function SignalsPage() {
 
     useEffect(() => { loadSignals(); }, [loadSignals]);
 
-    const handleMarkAllRead = () => {
-        setSignals([]);
-        setToastMessage("All signals marked as read");
+    const handleMarkAllRead = async () => {
+        try {
+            const { apiPatch } = await import("@/lib/api");
+            await apiPatch("/reports/mark-all-read", {});
+            setSignals([]);
+            setToastMessage("All signals marked as read");
+        } catch (err) {
+            setToastMessage("Failed to mark signals as read");
+        }
         setTimeout(() => setToastMessage(null), 3000);
+    };
+
+    const handleDismiss = async (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        try {
+            const { apiPatch } = await import("@/lib/api");
+            await apiPatch(`/reports/${id}/read`, {});
+            setSignals(prev => prev.filter(s => s.id !== id));
+        } catch (err) {
+            setToastMessage("Failed to dismiss signal");
+            setTimeout(() => setToastMessage(null), 3000);
+        }
     };
 
     const handleConfigure = () => {
@@ -90,9 +116,9 @@ export default function SignalsPage() {
         }, 2000);
     };
 
-    const highCount = signals.filter(s => s.impact === "High").length;
-    const medCount = signals.filter(s => s.impact === "Med").length;
-    const lowCount = signals.filter(s => s.impact === "Low").length;
+    const highCount = stats.high;
+    const medCount = stats.medium;
+    const lowCount = stats.low;
 
     const filteredSignals = signals.filter(s => activeFilter === "All Signals" || s.type.includes(activeFilter));
 
@@ -178,7 +204,7 @@ export default function SignalsPage() {
                         <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">
                             Total Scanned Today
                         </p>
-                        <p className="text-2xl font-bold text-slate-100">1,204</p>
+                        <p className="text-2xl font-bold text-slate-100">{loading ? "..." : stats.total.toLocaleString()}</p>
                     </div>
                     <span className="material-symbols-outlined text-white/20 text-3xl">
                         radar
@@ -271,7 +297,7 @@ export default function SignalsPage() {
 
                                     <div className="flex flex-col justify-center border-l border-white/5 pl-5 ml-2">
                                         <button
-                                            onClick={() => setSignals(signals.filter(s => s.id !== signal.id))}
+                                            onClick={(e) => handleDismiss(signal.id, e)}
                                             className="text-secondary hover:text-white transition-colors p-2 rounded-lg hover:bg-white/5 group/btn"
                                             title="Dismiss"
                                         >
