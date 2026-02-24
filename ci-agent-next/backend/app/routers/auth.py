@@ -5,10 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.database import users_col
+from app.database import users_col
 from app.middleware.auth import get_current_user
-from app.models.user import TokenResponse, UserCreate, UserLogin, UserOut
+from app.models.user import TokenResponse, UserCreate, UserOut, UserUpdate, UserPreferencesUpdate, UserPreferences, ForgotPasswordRequest, ResetPasswordRequest
 from app.utils.hashing import hash_password, verify_password
-from app.utils.jwt import create_access_token
+from app.utils.jwt import create_access_token, decode_token
+from app.utils.email import send_reset_email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -18,6 +20,10 @@ def _doc_to_user_out(doc: dict) -> UserOut:
         id=str(doc["_id"]),
         email=doc["email"],
         name=doc.get("name"),
+        last_name=doc.get("last_name"),
+        role=doc.get("role"),
+        bio=doc.get("bio"),
+        preferences=UserPreferences(**doc.get("preferences", {})),
         created_at=doc["created_at"],
     )
 
@@ -60,3 +66,74 @@ async def me(current_user=Depends(get_current_user)):
     return _doc_to_user_out(current_user)
 
 
+@router.patch("/me", response_model=UserOut)
+async def update_me(payload: UserUpdate, current_user=Depends(get_current_user)):
+    update_data = {k: v for k, v in payload.model_dump().items() if v is not None}
+    if not update_data:
+        return _doc_to_user_out(current_user)
+
+    await users_col.update_one(
+        {"_id": current_user["_id"]},
+        {"$set": update_data}
+    )
+    
+    updated_user = await users_col.find_one({"_id": current_user["_id"]})
+    return _doc_to_user_out(updated_user)
+
+
+@router.patch("/preferences", response_model=UserOut)
+async def update_preferences(payload: UserPreferencesUpdate, current_user=Depends(get_current_user)):
+    update_data = {f"preferences.{k}": v for k, v in payload.model_dump().items() if v is not None}
+    if not update_data:
+        return _doc_to_user_out(current_user)
+
+    await users_col.update_one(
+        {"_id": current_user["_id"]},
+        {"$set": update_data}
+    )
+    
+    updated_user = await users_col.find_one({"_id": current_user["_id"]})
+    return _doc_to_user_out(updated_user)
+
+
+@router.post("/forgot-password")
+async def forgot_password(request: ForgotPasswordRequest):
+    user = await users_col.find_one({"email": request.email})
+    if not user:
+        # Prevent email enumeration by always returning 200
+        return {"message": "If that email exists, a reset link has been sent."}
+
+    # Generate a temporary reset token leveraging our existing JWT logic
+    reset_token = create_access_token(str(user["_id"]))
+    
+    # Send email async in background task (for speed, we just await it here, but ideally BackgroundTasks is used)
+    await send_reset_email(user["email"], reset_token)
+    
+    return {"message": "If that email exists, a reset link has been sent."}
+
+
+@router.post("/reset-password")
+async def reset_password(request: ResetPasswordRequest):
+    try:
+        user_id = decode_token(request.token)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token"
+        )
+        
+    user = await users_col.find_one({"_id": ObjectId(user_id)})
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+        
+    hashed_password = hash_password(request.new_password)
+    
+    await users_col.update_one(
+        {"_id": ObjectId(user_id)},
+        {"$set": {"password_hash": hashed_password}}
+    )
+    
+    return {"message": "Password has been successfully reset."}
