@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import DashboardBackground from "@/components/ui/DashboardBackground";
@@ -24,27 +24,32 @@ export default function DashboardLayout({
     const [user, setUser] = useState<{ name: string, email: string } | null>(null);
 
     React.useEffect(() => {
+        let isMounted = true;
         const fetchUser = async () => {
             try {
                 // Must dynamically import apiFetch to avoid hydration/circular issues if any,
                 // or just import at top. I'll import at top in a moment, or use window.fetch if needed.
                 const { apiFetch } = await import("@/lib/api");
                 const data = await apiFetch("/auth/me");
-                setUser(data as { name: string, email: string });
+                if (isMounted) setUser(data as { name: string, email: string });
             } catch (err) {
                 console.error("Failed to load user:", err);
+                if (isMounted) {
+                    // Redirect to login on auth failure
+                    window.location.href = "/login";
+                }
             }
         };
         fetchUser();
+        return () => { isMounted = false; };
     }, []);
+
+    const { push } = useRouter();
 
     const handleAddClick = () => {
         setIsAdding(true);
-        setTimeout(() => {
-            setIsAdding(false);
-            setNotification("Connecting to global intelligence network...");
-            setTimeout(() => setNotification(null), 3000);
-        }, 1500);
+        push("/dashboard/competitors");
+        setIsAdding(false);
     };
 
     const isActive = (href: string) => {
