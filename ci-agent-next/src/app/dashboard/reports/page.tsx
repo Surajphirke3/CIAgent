@@ -204,7 +204,13 @@ export default function ReportsPage() {
                                 animate={{ opacity: 1, scale: 1 }}
                                 transition={{ delay: i * 0.1 }}
                                 className={`glass-panel p-6 rounded-2xl border-t bg-gradient-to-b ${type.gradient} hover:bg-white/5 transition-colors cursor-pointer group`}
-                                onClick={() => showToast(`${type.title} template coming soon`)}
+                                onClick={() => {
+                                    if (type.title === "Market Deep Dive") {
+                                        handleGenerate();
+                                    } else {
+                                        showToast(`${type.title} template requires selecting competitors first. Proceeding to configure...`);
+                                    }
+                                }}
                             >
                                 <div className="w-12 h-12 rounded-full bg-background-dark/50 flex items-center justify-center mb-4 border border-white/5">
                                     <span className={`material-symbols-outlined ${type.iconColor}`}>{type.icon}</span>
@@ -212,8 +218,10 @@ export default function ReportsPage() {
                                 <h4 className="text-lg font-bold text-slate-100 mb-2">{type.title}</h4>
                                 <p className="text-sm text-slate-400">{type.desc}</p>
                                 <button className="mt-4 flex items-center text-xs font-bold text-slate-500 group-hover:text-slate-300 transition-colors w-full text-left">
-                                    Use Template
-                                    <span className="material-symbols-outlined text-sm ml-1 group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                                    {type.title === "Market Deep Dive" && isGenerating ? "Generating..." : "Use Template"}
+                                    <span className={`material-symbols-outlined text-sm ml-1 ${type.title === "Market Deep Dive" && isGenerating ? 'animate-spin' : 'group-hover:translate-x-1 transition-transform'}`}>
+                                        {type.title === "Market Deep Dive" && isGenerating ? 'autorenew' : 'arrow_forward'}
+                                    </span>
                                 </button>
                             </motion.div>
                         ))}
