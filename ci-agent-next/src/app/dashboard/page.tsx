@@ -1,447 +1,319 @@
 "use client";
-import Link from "next/link";
 import { motion } from "framer-motion";
+import { useEffect, useState, useCallback } from "react";
+import { apiFetch, ApiError } from "@/lib/api";
 
-const navItems = [
-    { icon: "dashboard", label: "Overview", active: true },
-    { icon: "group", label: "Competitors", active: false },
-    { icon: "sensors", label: "Signals", active: false },
-    { icon: "description", label: "Reports", active: false },
-];
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface Competitor {
+    id: string;
+    name: string;
+    url: string;
+    status: string;
+    last_scraped: string | null;
+    tags: string[];
+}
 
-const statCards = [
-    {
-        label: "High Risk Score",
-        value: "84",
-        change: "12%",
-        changeDir: "up",
-        color: "pink-500",
-        barWidth: "84%",
-    },
-    {
-        label: "Total Changes",
-        value: "1,240",
-        change: "5%",
-        changeDir: "up",
-        color: "secondary",
-        barWidth: "65%",
-    },
-    {
-        label: "AI Insights",
-        value: "32",
-        change: "2%",
-        changeDir: "down",
-        color: "accent-purple",
-        barWidth: "40%",
-    },
-    {
-        label: "Last Scan",
-        value: "2m ago",
-        change: null,
-        changeDir: null,
-        color: null,
-        barWidth: null,
-    },
-];
+interface Report {
+    id: string;
+    competitor_name: string;
+    created_at: string;
+    ai_summary: string;
+    severity: "low" | "medium" | "high";
+    diffs: { section: string; change_type: string }[];
+}
 
-const signals = [
-    {
-        initials: "NV",
-        name: "Nebula Ventures",
-        type: "Pricing Shift",
-        impact: "High",
-        impactColor: "text-pink-500",
-        time: "14 mins ago",
-    },
-    {
-        initials: "TC",
-        name: "Titan Core",
-        type: "Hiring Spike",
-        impact: "Med",
-        impactColor: "text-yellow-500",
-        time: "2 hrs ago",
-    },
-    {
-        initials: "AE",
-        name: "Aether Edge",
-        type: "Tech Patent",
-        impact: "Low",
-        impactColor: "text-secondary",
-        time: "5 hrs ago",
-    },
-];
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function timeAgo(dateStr: string | null): string {
+    if (!dateStr) return "Never";
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+}
 
-const reports = [
-    {
-        month: "SEPT 2023",
-        title: "Market Deep Dive Q3",
-        desc: "Analysis of emerging APAC competitors.",
-        iconColor: "text-secondary",
-        icon: "description",
-    },
-    {
-        month: "AUG 2023",
-        title: "Competitor X Analysis",
-        desc: "Detailed breakdown of feature parity.",
-        iconColor: "text-pink-500",
-        icon: "summarize",
-    },
-    {
-        month: "JUL 2023",
-        title: "Strategic Outlook",
-        desc: "Future trends and predictive scoring.",
-        iconColor: "text-accent-purple",
-        icon: "clinical_notes",
-    },
-];
+function formatDate(iso: string) {
+    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
 
-export default function DashboardPage() {
+function severityColor(s: string) {
+    if (s === "high") return "text-pink-500";
+    if (s === "medium") return "text-yellow-500";
+    return "text-secondary";
+}
+
+// ─── Stat Card ─────────────────────────────────────────────────────────────────
+function StatCard({ label, value, sub, color, barWidth, loading }: {
+    label: string; value: string; sub?: string | null;
+    color?: string; barWidth?: string; loading?: boolean;
+}) {
+    if (loading) return (
+        <div className="glass-panel rounded-2xl p-6 bg-background-dark/60 backdrop-blur-md border border-white/10 shadow-2xl animate-pulse">
+            <div className="h-3 bg-white/5 rounded w-2/3 mb-3"></div>
+            <div className="h-8 bg-white/5 rounded w-1/2"></div>
+        </div>
+    );
     return (
-        <div className="flex h-screen overflow-hidden bg-dashboard-bg">
-            {/* Sidebar */}
-            <aside className="w-72 glass-panel h-full flex flex-col border-r border-white/5 shrink-0">
-                <div className="p-8 flex items-center gap-3">
-                    <Link href="/" className="flex items-center gap-3 group">
-                        <div className="w-10 h-10 rounded-xl vibrant-gradient flex items-center justify-center shadow-lg shadow-purple-500/20 group-hover:scale-110 transition-transform">
-                            <span className="material-symbols-outlined text-white text-2xl">
-                                shield_person
-                            </span>
-                        </div>
-                        <div>
-                            <h1 className="text-xl font-bold tracking-tight text-slate-100">
-                                CIAgent
-                            </h1>
-                            <p className="text-[10px] uppercase tracking-[0.2em] text-secondary font-bold">
-                                Enterprise Intel
-                            </p>
-                        </div>
-                    </Link>
+        <motion.div className="glass-panel rounded-2xl p-6 relative overflow-hidden group bg-background-dark/60 backdrop-blur-md border border-white/10 shadow-2xl">
+            <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-2">{label}</p>
+            <div className="flex items-end gap-3">
+                <h3 className="text-4xl font-bold text-slate-100 tracking-tighter">{value}</h3>
+                {sub && <span className={`${color ?? "text-secondary"} text-sm font-bold pb-1`}>{sub}</span>}
+            </div>
+            {barWidth ? (
+                <div className="mt-4 h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                    <div className={`h-full ${color ? `bg-${color}` : "bg-secondary"} rounded-full transition-all duration-1000`} style={{ width: barWidth }}></div>
                 </div>
-
-                <nav className="flex-1 px-4 space-y-2 mt-4">
-                    {navItems.map((item) => (
-                        <a
-                            key={item.label}
-                            href="#"
-                            className={`flex items-center gap-4 px-4 py-3 rounded-xl transition-all ${item.active
-                                ? "vibrant-active text-secondary"
-                                : "hover:bg-white/5 text-slate-400"
-                                }`}
-                        >
-                            <span className="material-symbols-outlined">{item.icon}</span>
-                            <span className="text-sm font-medium">{item.label}</span>
-                        </a>
-                    ))}
-                </nav>
-
-                <div className="p-6 mt-auto">
-                    <button className="w-full py-3 vibrant-gradient text-white rounded-xl font-bold text-sm shadow-xl shadow-purple-500/10 hover:opacity-90 transition-all flex items-center justify-center gap-2">
-                        <span className="material-symbols-outlined text-lg">add</span>
-                        Add Competitor
-                    </button>
+            ) : (
+                <div className="mt-4 flex gap-1">
+                    <div className="h-1 flex-1 bg-secondary/60 rounded-full animate-pulse"></div>
+                    <div className="h-1 flex-1 bg-secondary/40 rounded-full"></div>
+                    <div className="h-1 flex-1 bg-secondary/20 rounded-full"></div>
                 </div>
-            </aside>
+            )}
+        </motion.div>
+    );
+}
 
-            {/* Main Content */}
-            <main className="flex-1 flex flex-col overflow-y-auto">
-                {/* Header */}
-                <header className="h-20 flex items-center justify-between px-10 border-b border-white/5 sticky top-0 z-10 glass-panel shrink-0">
-                    <div className="flex items-center gap-2">
-                        <span className="text-slate-400 text-sm">Dashboard</span>
-                        <span className="material-symbols-outlined text-sm text-slate-500">
-                            chevron_right
-                        </span>
-                        <h2 className="text-lg font-semibold text-slate-100">
-                            Intelligence Overview
-                        </h2>
-                    </div>
-                    <div className="flex items-center gap-6">
-                        <div className="relative group cursor-pointer">
-                            <span className="material-symbols-outlined text-slate-400 hover:text-accent-cyan transition-colors">
-                                notifications
-                            </span>
-                            <div className="absolute -top-1 -right-1 w-2 h-2 bg-pink-500 rounded-full border-2 border-background-dark"></div>
-                        </div>
-                        <div className="flex items-center gap-3 pl-6 border-l border-white/10">
-                            <div className="text-right">
-                                <p className="text-sm font-bold text-slate-100 leading-tight">
-                                    Marcus Vane
-                                </p>
-                                <p className="text-[10px] text-slate-400 uppercase tracking-wider">
-                                    Lead Analyst
-                                </p>
+// ─── Main Dashboard ─────────────────────────────────────────────────────────────
+export default function DashboardPage() {
+    const [competitors, setCompetitors] = useState<Competitor[]>([]);
+    const [reports, setReports] = useState<Report[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    const fetchData = useCallback(async () => {
+        setLoading(true);
+        try {
+            const [comps, reps] = await Promise.all([
+                apiFetch<Competitor[]>("/competitors/"),
+                apiFetch<Report[]>("/reports/"),
+            ]);
+            setCompetitors(comps);
+            setReports(reps);
+        } catch (err) {
+            // Silently fall back — dashboard still renders with empty data
+            console.warn("Dashboard fetch error:", err instanceof ApiError ? err.message : err);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => { fetchData(); }, [fetchData]);
+
+    // ── Derived stats ──────────────────────────────────────────────────────────
+    const activeCount = competitors.filter(c => c.status === "active").length;
+    const highSeverityReports = reports.filter(r => r.severity === "high");
+    const totalChanges = reports.reduce((acc, r) => acc + r.diffs?.length || 0, 0);
+    const latestScan = competitors
+        .map(c => c.last_scraped)
+        .filter(Boolean)
+        .sort((a, b) => new Date(b!).getTime() - new Date(a!).getTime())[0] ?? null;
+
+    // ── Recent "signals" = last 5 reports mapped to signal rows ───────────────
+    const signals = reports.slice(0, 5).map(r => {
+        let pseudoType = "Web Update";
+        if (r.ai_summary.toLowerCase().includes("pricin")) pseudoType = "Pricing";
+        else if (r.ai_summary.toLowerCase().includes("hir") || r.ai_summary.toLowerCase().includes("job")) pseudoType = "Hiring";
+        else if (r.ai_summary.toLowerCase().includes("feature") || r.ai_summary.toLowerCase().includes("launch")) pseudoType = "Launch";
+
+        return {
+            id: r.id,
+            initials: r.competitor_name.slice(0, 2).toUpperCase(),
+            name: r.competitor_name,
+            type: pseudoType,
+            impact: r.severity === "high" ? "High" : r.severity === "medium" ? "Med" : "Low",
+            impactColor: severityColor(r.severity),
+            time: timeAgo(r.created_at),
+        };
+    });
+
+    // ── Recent reports = last 3 ────────────────────────────────────────────────
+    const recentReports = reports.slice(0, 3);
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="p-10 space-y-8"
+        >
+            {/* Stat Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <StatCard loading={loading} label="High Risk Reports" value={String(highSeverityReports.length)} sub={highSeverityReports.length > 0 ? "⚠ Active" : null} color="pink-500" barWidth={`${Math.min(100, (highSeverityReports.length / Math.max(reports.length, 1)) * 100).toFixed(0)}%`} />
+                <StatCard loading={loading} label="Total Changes" value={String(totalChanges)} sub={totalChanges > 0 ? "across scans" : null} color="secondary" barWidth={totalChanges > 0 ? "65%" : "5%"} />
+                <StatCard loading={loading} label="AI Reports" value={String(reports.length)} sub={reports.length > 0 ? "generated" : null} color="accent-purple" barWidth={`${Math.min(100, reports.length * 10)}%`} />
+                <StatCard loading={loading} label="Last Scan" value={timeAgo(latestScan)} sub={activeCount > 0 ? `${activeCount} active` : null} />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Left Column */}
+                <div className="lg:col-span-2 space-y-8">
+                    {/* Intelligence Summary */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.3 }}
+                        className="glass-panel rounded-2xl p-8 relative overflow-hidden bg-background-dark/60 backdrop-blur-md border border-white/10 shadow-2xl"
+                    >
+                        <div className="flex justify-between items-start mb-6">
+                            <div>
+                                <span className="text-pink-500 text-sm font-bold flex items-center gap-0.5 mb-1">Featured Insight</span>
+                                <h2 className="text-2xl font-bold text-slate-100">Intelligence Overview</h2>
                             </div>
-                            <div className="w-10 h-10 rounded-full border-2 border-pink-500/40 p-0.5">
-                                <div className="w-full h-full rounded-full bg-gradient-to-br from-pink-500/30 to-purple-500/30 flex items-center justify-center">
-                                    <span className="material-symbols-outlined text-slate-300 text-lg">
-                                        person
-                                    </span>
-                                </div>
-                            </div>
+                            <button className="p-2 bg-white/5 rounded-lg text-slate-400 hover:text-white transition-colors">
+                                <span className="material-symbols-outlined">refresh</span>
+                            </button>
                         </div>
-                        <Link
-                            href="/login"
-                            className="flex items-center gap-2 pl-4 border-l border-white/10 text-slate-400 hover:text-red-400 transition-colors group"
-                            title="Log out"
-                        >
-                            <span className="material-symbols-outlined text-xl group-hover:translate-x-0.5 transition-transform">
-                                logout
-                            </span>
-                        </Link>
-                    </div>
-                </header>
-
-                {/* Dashboard Content */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5 }}
-                    className="p-10 space-y-8"
-                >
-                    {/* Stat Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                        {statCards.map((card, i) => (
-                            <motion.div
-                                key={card.label}
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: i * 0.1 }}
-                                className="glass-panel rounded-2xl p-6 relative overflow-hidden group"
-                            >
-                                <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-2">
-                                    {card.label}
-                                </p>
-                                <div className="flex items-end gap-3">
-                                    <h3 className="text-4xl font-bold text-slate-100 tracking-tighter">
-                                        {card.value}
-                                    </h3>
-                                    {card.change && (
-                                        <span
-                                            className={`text-${card.color} text-sm font-bold pb-1 flex items-center gap-0.5`}
-                                        >
-                                            <span className="material-symbols-outlined text-sm">
-                                                {card.changeDir === "up"
-                                                    ? "trending_up"
-                                                    : "trending_down"}
-                                            </span>
-                                            {card.change}
-                                        </span>
-                                    )}
-                                    {!card.change && (
-                                        <span className="text-slate-500 text-xs font-medium pb-1">
-                                            Real-time
-                                        </span>
-                                    )}
-                                </div>
-                                {card.barWidth && (
-                                    <div className="mt-4 h-1 w-full bg-white/5 rounded-full overflow-hidden">
-                                        <div
-                                            className={`h-full bg-${card.color} rounded-full transition-all duration-1000`}
-                                            style={{ width: card.barWidth }}
-                                        ></div>
-                                    </div>
-                                )}
-                                {!card.barWidth && (
-                                    <div className="mt-4 flex gap-1">
-                                        <div className="h-1 flex-1 bg-secondary/60 rounded-full animate-pulse"></div>
-                                        <div className="h-1 flex-1 bg-secondary/40 rounded-full"></div>
-                                        <div className="h-1 flex-1 bg-secondary/20 rounded-full"></div>
-                                    </div>
-                                )}
-                            </motion.div>
-                        ))}
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        {/* Left Column - Intelligence & Signals */}
-                        <div className="lg:col-span-2 space-y-8">
-                            {/* Intelligence Summary */}
-                            <motion.div
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.3 }}
-                                className="glass-panel rounded-2xl p-8 relative overflow-hidden"
-                            >
-                                <div className="flex justify-between items-start mb-6">
-                                    <div>
-                                        <span className="text-pink-500 text-sm font-bold flex items-center gap-0.5 mb-1">
-                                            Featured Insight
-                                        </span>
-                                        <h2 className="text-2xl font-bold text-slate-100">
-                                            Weekly Intelligence Summary
-                                        </h2>
-                                    </div>
-                                    <button className="p-2 bg-white/5 rounded-lg text-slate-400 hover:text-white transition-colors">
-                                        <span className="material-symbols-outlined">download</span>
-                                    </button>
-                                </div>
+                        {loading ? (
+                            <div className="space-y-3">
+                                <div className="h-4 bg-white/5 rounded animate-pulse w-full"></div>
+                                <div className="h-4 bg-white/5 rounded animate-pulse w-5/6"></div>
+                                <div className="h-4 bg-white/5 rounded animate-pulse w-4/5"></div>
+                            </div>
+                        ) : reports.length > 0 ? (
+                            <>
                                 <p className="text-slate-300 leading-relaxed mb-6">
-                                    AI-generated analysis of market shifts and competitor movements
-                                    over the last 7 days. Key trends indicate a{" "}
-                                    <span className="text-pink-500 font-bold">15% increase</span>{" "}
-                                    in aggressive pricing strategies across the tech sector.
-                                    Stealth-mode competitor{" "}
-                                    <span className="text-secondary font-bold">
-                                        &quot;Project X&quot;
-                                    </span>{" "}
-                                    has increased hiring in AI research by 40% this month.
+                                    {reports[0]?.ai_summary ?? "No recent intelligence available."}
                                 </p>
                                 <div className="flex gap-4">
                                     <div className="flex-1 bg-white/5 rounded-xl p-4 border border-white/5">
-                                        <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">
-                                            Market Sentiment
-                                        </p>
-                                        <p className="text-slate-100 font-semibold">
-                                            Bearish Volatility
-                                        </p>
+                                        <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Top Threat</p>
+                                        <p className="text-slate-100 font-semibold truncate">{reports[0]?.competitor_name ?? "—"}</p>
                                     </div>
                                     <div className="flex-1 bg-white/5 rounded-xl p-4 border border-white/5">
-                                        <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">
-                                            Primary Threat
-                                        </p>
-                                        <p className="text-slate-100 font-semibold">
-                                            Aggressive Pricing
-                                        </p>
+                                        <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Severity</p>
+                                        <p className={`font-semibold capitalize ${severityColor(reports[0]?.severity ?? "low")}`}>{reports[0]?.severity ?? "—"}</p>
                                     </div>
                                 </div>
-                            </motion.div>
+                            </>
+                        ) : (
+                            <p className="text-slate-500 text-sm">No intelligence reports yet. Add competitors and trigger a scan to begin.</p>
+                        )}
+                    </motion.div>
 
-                            {/* Signals Table */}
-                            <motion.div
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.4 }}
-                                className="glass-panel rounded-2xl overflow-hidden"
-                            >
-                                <div className="p-6 border-b border-white/5 flex justify-between items-center">
-                                    <h3 className="text-lg font-bold text-slate-100">
-                                        Recent Signals
-                                    </h3>
-                                    <button className="text-secondary text-sm font-bold flex items-center gap-0.5 hover:opacity-80 transition-opacity">
-                                        View all signals
-                                    </button>
-                                </div>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-left">
-                                        <thead>
-                                            <tr className="bg-white/5 text-[10px] uppercase tracking-widest text-slate-500">
-                                                <th className="px-6 py-4 font-bold">Competitor</th>
-                                                <th className="px-6 py-4 font-bold">Signal Type</th>
-                                                <th className="px-6 py-4 font-bold">Impact</th>
-                                                <th className="px-6 py-4 font-bold">Time</th>
-                                                <th className="px-6 py-4 font-bold"></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-white/5">
-                                            {signals.map((signal) => (
-                                                <tr
-                                                    key={signal.initials}
-                                                    className="hover:bg-white/5 transition-colors group cursor-pointer"
-                                                >
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-8 h-8 rounded bg-slate-800 flex items-center justify-center font-bold text-xs text-slate-400">
-                                                                {signal.initials}
-                                                            </div>
-                                                            <span className="text-sm font-semibold text-slate-200">
-                                                                {signal.name}
-                                                            </span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <span className="text-xs px-2 py-1 bg-white/5 rounded text-slate-400">
-                                                            {signal.type}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <div
-                                                            className={`${signal.impactColor} text-sm font-bold flex items-center gap-1.5`}
-                                                        >
-                                                            <span
-                                                                className={`w-1.5 h-1.5 rounded-full ${signal.impactColor.replace("text-", "bg-")}`}
-                                                            ></span>
-                                                            {signal.impact}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-xs text-slate-500">
-                                                        {signal.time}
-                                                    </td>
-                                                    <td className="px-6 py-4 text-right">
-                                                        <span className="material-symbols-outlined text-slate-600 group-hover:text-accent-cyan text-sm transition-colors">
-                                                            arrow_forward
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </motion.div>
+                    {/* Signals Table */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.4 }}
+                        className="glass-panel rounded-2xl overflow-hidden bg-background-dark/60 backdrop-blur-md border border-white/10 shadow-2xl"
+                    >
+                        <div className="p-6 border-b border-white/5 flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-slate-100">Recent Signals</h3>
+                            <a href="/dashboard/signals" className="text-secondary text-sm font-bold flex items-center gap-0.5 hover:opacity-80 transition-opacity">
+                                View all
+                            </a>
                         </div>
-
-                        {/* Right Column */}
-                        <motion.div
-                            initial={{ opacity: 0, x: 20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: 0.5 }}
-                            className="space-y-6"
-                        >
-                            {/* Add Competitor CTA */}
-                            <div className="glass-panel rounded-2xl p-6 border-dashed! border-white/20 flex flex-col items-center text-center">
-                                <div className="w-14 h-14 rounded-full bg-white/5 flex items-center justify-center mb-4">
-                                    <span className="material-symbols-outlined text-slate-400 text-3xl">
-                                        add_business
-                                    </span>
-                                </div>
-                                <h4 className="text-lg font-bold text-slate-100 mb-2">
-                                    Monitor More
-                                </h4>
-                                <p className="text-slate-400 text-sm mb-6">
-                                    Expand your network to get a 360-degree view of your industry
-                                    landscape.
-                                </p>
-                                <button className="w-full py-3 vibrant-gradient text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-purple-500/10 hover:opacity-90">
-                                    Start Free Scan
-                                </button>
+                        {loading ? (
+                            <div className="p-6 space-y-4">
+                                {[...Array(3)].map((_, i) => <div key={i} className="h-10 bg-white/5 rounded animate-pulse"></div>)}
                             </div>
+                        ) : signals.length > 0 ? (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left">
+                                    <thead>
+                                        <tr className="bg-white/5 text-[10px] uppercase tracking-widest text-slate-500">
+                                            <th className="px-6 py-4 font-bold">Competitor</th>
+                                            <th className="px-6 py-4 font-bold">Signal Type</th>
+                                            <th className="px-6 py-4 font-bold">Impact</th>
+                                            <th className="px-6 py-4 font-bold">Time</th>
+                                            <th className="px-6 py-4 font-bold"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-white/5">
+                                        {signals.map((s, i) => (
+                                            <tr key={i} className="hover:bg-white/5 transition-colors group cursor-pointer">
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded bg-slate-800 flex items-center justify-center font-bold text-xs text-slate-400">{s.initials}</div>
+                                                        <span className="text-sm font-semibold text-slate-200">{s.name}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4"><span className="text-xs px-2 py-1 bg-white/5 rounded text-slate-400">{s.type}</span></td>
+                                                <td className="px-6 py-4">
+                                                    <div className={`${s.impactColor} text-sm font-bold flex items-center gap-1.5`}>
+                                                        <span className={`w-1.5 h-1.5 rounded-full ${s.impactColor.replace("text-", "bg-")}`}></span>
+                                                        {s.impact}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-xs text-slate-500">{s.time}</td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <span className="material-symbols-outlined text-slate-600 group-hover:text-accent-cyan text-sm transition-colors">arrow_forward</span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <div className="p-8 text-center text-slate-500 text-sm">No signals yet — trigger a scan to see intelligence signals.</div>
+                        )}
+                    </motion.div>
+                </div>
 
-                            {/* Recent Reports */}
-                            <div className="space-y-4">
-                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">
-                                    Recent Reports
-                                </h3>
-                                {reports.map((report) => (
-                                    <div
-                                        key={report.title}
-                                        className="glass-panel rounded-2xl p-4 group hover:border-white/20 transition-all cursor-pointer"
-                                    >
-                                        <div className="flex items-start gap-4">
-                                            <div
-                                                className={`${report.iconColor} flex items-center pt-1`}
-                                            >
-                                                <span className="material-symbols-outlined">
-                                                    {report.icon}
-                                                </span>
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-xs text-slate-500 font-bold mb-0.5">
-                                                    {report.month}
-                                                </p>
-                                                <h5 className="text-sm font-bold text-slate-100 group-hover:text-accent-cyan transition-colors">
-                                                    {report.title}
-                                                </h5>
-                                                <p className="text-[11px] text-slate-400 mt-1 truncate">
-                                                    {report.desc}
-                                                </p>
-                                            </div>
+                {/* Right Column */}
+                <motion.div
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.5 }}
+                    className="space-y-6"
+                >
+                    {/* Add Competitor CTA */}
+                    <div className="glass-panel rounded-2xl p-6 border-dashed border-white/20 flex flex-col items-center text-center bg-background-dark/60 backdrop-blur-md shadow-2xl">
+                        <div className="w-14 h-14 rounded-full bg-white/5 flex items-center justify-center mb-4">
+                            <span className="material-symbols-outlined text-slate-400 text-3xl">add_business</span>
+                        </div>
+                        <h4 className="text-lg font-bold text-slate-100 mb-2">Monitor More</h4>
+                        <p className="text-slate-400 text-sm mb-6">
+                            {competitors.length > 0
+                                ? `You are tracking ${competitors.length} competitor${competitors.length > 1 ? "s" : ""}.`
+                                : "Add your first competitor to start collecting intelligence."}
+                        </p>
+                        <a
+                            href="/dashboard/competitors"
+                            className="w-full py-3 vibrant-gradient text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-purple-500/10 hover:opacity-90 text-center block"
+                        >
+                            {competitors.length > 0 ? "Manage Competitors" : "Start Free Scan"}
+                        </a>
+                    </div>
+
+                    {/* Recent Reports */}
+                    <div className="space-y-4">
+                        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Recent Reports</h3>
+                        {loading ? (
+                            <div className="space-y-3">
+                                {[...Array(3)].map((_, i) => <div key={i} className="glass-panel rounded-2xl p-4 animate-pulse h-20 bg-background-dark/60 border border-white/10"></div>)}
+                            </div>
+                        ) : recentReports.length > 0 ? (
+                            recentReports.map((report) => (
+                                <a
+                                    key={report.id}
+                                    href="/dashboard/reports"
+                                    className="glass-panel rounded-2xl p-4 group hover:border-white/30 transition-all cursor-pointer bg-background-dark/60 backdrop-blur-md border border-white/10 shadow-2xl block"
+                                >
+                                    <div className="flex items-start gap-4">
+                                        <div className={`${severityColor(report.severity)} flex items-center pt-1`}>
+                                            <span className="material-symbols-outlined">
+                                                {report.severity === "high" ? "warning" : report.severity === "medium" ? "info" : "description"}
+                                            </span>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-xs text-slate-500 font-bold mb-0.5">{formatDate(report.created_at)}</p>
+                                            <h5 className="text-sm font-bold text-slate-100 group-hover:text-accent-cyan transition-colors">{report.competitor_name}</h5>
+                                            <p className="text-[11px] text-slate-400 mt-1 truncate">{report.ai_summary}</p>
                                         </div>
                                     </div>
-                                ))}
+                                </a>
+                            ))
+                        ) : (
+                            <div className="glass-panel rounded-2xl p-6 text-center border border-dashed border-white/10">
+                                <p className="text-slate-500 text-sm">No reports yet.</p>
                             </div>
-                        </motion.div>
+                        )}
                     </div>
                 </motion.div>
-            </main>
-        </div>
+            </div>
+        </motion.div>
     );
 }

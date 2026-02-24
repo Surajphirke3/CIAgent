@@ -3,10 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
-import { setToken } from "@/lib/auth";
-import { ApiError } from "@/lib/api";
-
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { ApiError, apiPost } from "@/lib/api";
 
 const BackgroundAnimation = () => {
     const video1Ref = useRef<HTMLVideoElement>(null);
@@ -54,39 +51,39 @@ const BackgroundAnimation = () => {
     );
 };
 
-export default function LoginPage() {
+export default function SignupPage() {
     const router = useRouter();
     const [showPassword, setShowPassword] = useState(false);
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
-    const [errors, setErrors] = useState<{ email?: string; password?: string; general?: string }>({});
-    const [isLoading, setIsLoading] = useState(false);
-    const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-    useEffect(() => {
-        if (typeof window !== "undefined") {
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get("registered") === "true") {
-                setSuccessMessage("Account created successfully! Please log in.");
-                // Clean up URL
-                window.history.replaceState({}, document.title, window.location.pathname);
-            }
-        }
-    }, []);
+    const [email, setEmail] = useState("");
+    const [name, setName] = useState("");
+    const [password, setPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+
+    const [errors, setErrors] = useState<{ email?: string; password?: string; confirmPassword?: string; general?: string }>({});
+    const [isLoading, setIsLoading] = useState(false);
 
     const validateForm = (): boolean => {
-        const newErrors: { email?: string; password?: string } = {};
+        const newErrors: { email?: string; password?: string; confirmPassword?: string } = {};
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
         if (!email.trim()) {
             newErrors.email = "Email is required";
         } else if (!emailRegex.test(email)) {
             newErrors.email = "Enter a valid email address";
         }
+
         if (!password) {
             newErrors.password = "Password is required";
         } else if (password.length < 6) {
             newErrors.password = "Password must be at least 6 characters";
         }
+
+        if (password !== confirmPassword) {
+            newErrors.confirmPassword = "Passwords do not match";
+        }
+
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -99,30 +96,15 @@ export default function LoginPage() {
         setErrors({});
 
         try {
-            // FastAPI OAuth2 login expects application/x-www-form-urlencoded
-            const formData = new URLSearchParams();
-            formData.append("username", email);
-            formData.append("password", password);
-
-            const res = await fetch(`${BASE_URL}/auth/login`, {
-                method: "POST",
-                headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                body: formData.toString(),
+            // Call POST /auth/register
+            await apiPost("/auth/register", {
+                email: email.trim(),
+                name: name.trim() || undefined,
+                password: password,
             });
 
-            if (!res.ok) {
-                let message = "Incorrect email or password";
-                try {
-                    const body = await res.json();
-                    message = body?.detail ?? message;
-                } catch { /* ignore */ }
-                setErrors({ general: message });
-                return;
-            }
-
-            const data = await res.json() as { access_token: string };
-            setToken(data.access_token);
-            router.push("/dashboard");
+            // Redirect to login with success state
+            router.push("/login?registered=true");
         } catch (err) {
             if (err instanceof ApiError) {
                 setErrors({ general: err.message });
@@ -134,32 +116,19 @@ export default function LoginPage() {
         }
     };
 
-    const handleDemoLogin = async () => {
-        setEmail("demo@ciagent.com");
-        setPassword("demo123!");
-        setErrors({});
-        setIsLoading(true);
-
-        // Demo mode: skip backend check, just navigate
-        setTimeout(() => {
-            setIsLoading(false);
-            router.push("/dashboard");
-        }, 500);
-    };
-
     return (
         <div className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden">
             {/* Background Animation */}
             <BackgroundAnimation />
             <div className="fixed inset-0 z-0 bg-black/40 pointer-events-none"></div>
 
-            <main className="relative z-10 flex flex-col items-center justify-center p-6 w-full">
+            <main className="relative z-10 flex flex-col items-center justify-center p-6 w-full my-8">
                 {/* Logo */}
                 <motion.div
                     initial={{ opacity: 0, y: -30 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.6 }}
-                    className="mb-10 flex flex-col items-center gap-3"
+                    className="mb-8 flex flex-col items-center gap-3"
                 >
                     <Link href="/" className="flex flex-col items-center gap-3 group">
                         <div className="w-14 h-14 bg-gradient-to-br from-primary to-accent-cyan rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(43,43,238,0.4)] group-hover:scale-110 transition-transform">
@@ -172,33 +141,21 @@ export default function LoginPage() {
                     </Link>
                 </motion.div>
 
-                {/* Login Card */}
+                {/* Signup Card */}
                 <motion.div
                     initial={{ opacity: 0, y: 40, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     transition={{ duration: 0.7, delay: 0.2 }}
-                    className="w-full max-w-[440px] glass-card neon-border rounded-xl p-8 md:p-10 flex flex-col gap-8"
+                    className="w-full max-w-[440px] glass-card neon-border rounded-xl p-8 md:p-10 flex flex-col gap-6"
                 >
                     <div className="text-center space-y-2">
-                        <h2 className="text-2xl md:text-3xl font-bold text-white leading-tight">
-                            Access Your Intelligence Dashboard
+                        <h2 className="text-2xl font-bold text-white leading-tight">
+                            Create Your Account
                         </h2>
                         <p className="text-slate-400 text-sm font-medium tracking-wide">
-                            Monitor. Detect. Interpret. Deliver.
+                            Join to monitor the competitive landscape.
                         </p>
                     </div>
-
-                    {/* Success banner */}
-                    {successMessage && (
-                        <motion.div
-                            initial={{ opacity: 0, y: -8 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-4 py-3"
-                        >
-                            <span className="material-symbols-outlined text-emerald-400 text-lg">check_circle</span>
-                            <p className="text-emerald-400 text-sm font-medium">{successMessage}</p>
-                        </motion.div>
-                    )}
 
                     {/* General API error banner */}
                     {errors.general && (
@@ -212,9 +169,29 @@ export default function LoginPage() {
                         </motion.div>
                     )}
 
-                    <form className="space-y-6" onSubmit={handleSubmit}>
+                    <form className="space-y-5" onSubmit={handleSubmit}>
+                        {/* Name (Optional) */}
+                        <div className="space-y-1.5">
+                            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 ml-1" htmlFor="name">
+                                Full Name <span className="text-slate-600 normal-case tracking-normal">(Optional)</span>
+                            </label>
+                            <div className="relative group">
+                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
+                                    <span className="material-symbols-outlined text-lg">badge</span>
+                                </div>
+                                <input
+                                    className="w-full bg-slate-900/40 border border-slate-700 focus:border-primary/50 focus:ring-1 focus:ring-primary/50 rounded-lg py-3 pl-11 pr-4 text-white placeholder:text-slate-600 outline-none transition-all"
+                                    id="name"
+                                    placeholder="Jane Doe"
+                                    type="text"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                />
+                            </div>
+                        </div>
+
                         {/* Email */}
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 ml-1" htmlFor="email">
                                 Work Email
                             </label>
@@ -223,7 +200,7 @@ export default function LoginPage() {
                                     <span className="material-symbols-outlined text-lg">mail</span>
                                 </div>
                                 <input
-                                    className={`w-full bg-slate-900/40 border ${errors.email ? 'border-red-500/70 ring-1 ring-red-500/30' : 'border-slate-700 focus:border-primary/50 focus:ring-primary/50'} focus:ring-1 rounded-lg py-3.5 pl-11 pr-4 text-white placeholder:text-slate-600 outline-none transition-all`}
+                                    className={`w-full bg-slate-900/40 border ${errors.email ? 'border-red-500/70 ring-1 ring-red-500/30' : 'border-slate-700 focus:border-primary/50 focus:ring-primary/50'} focus:ring-1 rounded-lg py-3 pl-11 pr-4 text-white placeholder:text-slate-600 outline-none transition-all`}
                                     id="email"
                                     placeholder="name@company.com"
                                     type="text"
@@ -243,21 +220,16 @@ export default function LoginPage() {
                         </div>
 
                         {/* Password */}
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between px-1">
-                                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400" htmlFor="password">
-                                    Password
-                                </label>
-                                <a className="text-[10px] font-bold transition-colors uppercase tracking-widest text-accent-cyan hover:text-white cursor-pointer" href="#">
-                                    Forgot?
-                                </a>
-                            </div>
+                        <div className="space-y-1.5">
+                            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 ml-1" htmlFor="password">
+                                Password
+                            </label>
                             <div className="relative group">
                                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
                                     <span className="material-symbols-outlined text-lg">lock</span>
                                 </div>
                                 <input
-                                    className={`w-full bg-slate-900/40 border ${errors.password ? 'border-red-500/70 ring-1 ring-red-500/30' : 'border-slate-700 focus:border-accent-cyan/50 focus:ring-accent-cyan/50'} focus:ring-1 rounded-lg py-3.5 pl-11 pr-12 text-white placeholder:text-slate-600 outline-none transition-all`}
+                                    className={`w-full bg-slate-900/40 border ${errors.password ? 'border-red-500/70 ring-1 ring-red-500/30' : 'border-slate-700 focus:border-accent-cyan/50 focus:ring-accent-cyan/50'} focus:ring-1 rounded-lg py-3 pl-11 pr-12 text-white placeholder:text-slate-600 outline-none transition-all`}
                                     id="password"
                                     placeholder="••••••••"
                                     type={showPassword ? "text" : "password"}
@@ -279,8 +251,40 @@ export default function LoginPage() {
                             )}
                         </div>
 
+                        {/* Confirm Password */}
+                        <div className="space-y-1.5">
+                            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 ml-1" htmlFor="confirmPassword">
+                                Confirm Password
+                            </label>
+                            <div className="relative group">
+                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
+                                    <span className="material-symbols-outlined text-lg">lock_reset</span>
+                                </div>
+                                <input
+                                    className={`w-full bg-slate-900/40 border ${errors.confirmPassword ? 'border-red-500/70 ring-1 ring-red-500/30' : 'border-slate-700 focus:border-accent-cyan/50 focus:ring-accent-cyan/50'} focus:ring-1 rounded-lg py-3 pl-11 pr-12 text-white placeholder:text-slate-600 outline-none transition-all`}
+                                    id="confirmPassword"
+                                    placeholder="••••••••"
+                                    type={showConfirmPassword ? "text" : "password"}
+                                    value={confirmPassword}
+                                    onChange={(e) => {
+                                        setConfirmPassword(e.target.value);
+                                        if (errors.confirmPassword) setErrors(prev => ({ ...prev, confirmPassword: undefined }));
+                                    }}
+                                />
+                                <button className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-600 hover:text-slate-400 transition-colors" type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)}>
+                                    <span className="material-symbols-outlined text-lg">{showConfirmPassword ? "visibility_off" : "visibility"}</span>
+                                </button>
+                            </div>
+                            {errors.confirmPassword && (
+                                <motion.p initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="text-red-400 text-xs font-medium ml-1 flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-sm">error</span>
+                                    {errors.confirmPassword}
+                                </motion.p>
+                            )}
+                        </div>
+
                         {/* Action Buttons */}
-                        <div className="pt-2 space-y-4">
+                        <div className="pt-3">
                             <motion.button
                                 whileHover={{ scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
@@ -291,64 +295,28 @@ export default function LoginPage() {
                                 {isLoading ? (
                                     <>
                                         <span className="material-symbols-outlined text-lg animate-spin">autorenew</span>
-                                        Authenticating...
+                                        Creating Account...
                                     </>
                                 ) : (
                                     <>
-                                        Access Dashboard
-                                        <span className="material-symbols-outlined text-lg">arrow_forward</span>
+                                        Sign Up
+                                        <span className="material-symbols-outlined text-lg">person_add</span>
                                     </>
                                 )}
-                            </motion.button>
-                            <motion.button
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
-                                disabled={isLoading}
-                                className="w-full h-14 bg-white/5 border border-white/10 hover:bg-white/10 disabled:opacity-60 text-slate-300 font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
-                                type="button"
-                                onClick={handleDemoLogin}
-                            >
-                                <span className="material-symbols-outlined text-lg">play_circle</span>
-                                Continue as Demo
                             </motion.button>
                         </div>
                     </form>
 
                     <div className="text-center">
                         <p className="text-slate-500 text-sm">
-                            Don&apos;t have an account?
-                            <Link href="/signup" className="hover:underline font-semibold ml-1 text-accent-cyan">
-                                Sign up
+                            Already have an account?
+                            <Link href="/login" className="hover:underline font-semibold ml-1 text-accent-cyan">
+                                Log in
                             </Link>
                         </p>
                     </div>
                 </motion.div>
-
-                {/* System Status */}
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.8 }}
-                    className="mt-12 flex items-center gap-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-600"
-                >
-                    <div className="flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full animate-pulse bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)]"></span>
-                        Systems Operational
-                    </div>
-                    <div className="w-px h-3 bg-slate-800"></div>
-                    <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[12px]">security</span>
-                        AES-256 Encrypted
-                    </div>
-                </motion.div>
             </main>
-
-            {/* Decorative Star */}
-            <div className="fixed top-10 right-10 z-0 opacity-10 pointer-events-none">
-                <svg className="w-64 h-64 text-accent-cyan" fill="currentColor" viewBox="0 0 100 100">
-                    <path d="M50 0L61.2 38.8H100L68.8 61.2L80 100L50 77.6L20 100L31.2 61.2L0 38.8H38.8L50 0Z" />
-                </svg>
-            </div>
         </div>
     );
 }
