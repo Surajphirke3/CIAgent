@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 export default function ProfilePage() {
     const [isEditing, setIsEditing] = useState(false);
 
-    // Form state
     const [profile, setProfile] = useState({
         firstName: "Loading...",
         lastName: "",
@@ -14,23 +13,42 @@ export default function ProfilePage() {
         bio: "Specializing in competitor intelligence for the APAC region. Tracking emerging threats and predictive market modeling.",
     });
 
+    const [preferences, setPreferences] = useState({
+        emailAlerts: true,
+        pushNotifications: false,
+        weeklyDigest: true,
+        darkMode: true,
+    });
+
+    const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+    const showToast = (msg: string) => {
+        setToastMessage(msg);
+        setTimeout(() => setToastMessage(null), 3000);
+    };
+
     useEffect(() => {
         const fetchProfile = async () => {
             try {
                 const { apiFetch } = await import("@/lib/api");
-                const data = await apiFetch("/auth/me") as { name?: string, email?: string };
+                const data = await apiFetch("/auth/me") as any;
                 if (data) {
-                    const nameStr = data.name || "Agent Unknown";
-                    const spaceIdx = nameStr.indexOf(" ");
-                    const fName = spaceIdx > -1 ? nameStr.substring(0, spaceIdx) : nameStr;
-                    const lName = spaceIdx > -1 ? nameStr.substring(spaceIdx + 1) : "";
-
                     setProfile(prev => ({
                         ...prev,
-                        firstName: fName,
-                        lastName: lName,
+                        firstName: data.name || prev.firstName,
+                        lastName: data.last_name || prev.lastName,
                         email: data.email || prev.email,
+                        role: data.role || prev.role,
+                        bio: data.bio || prev.bio,
                     }));
+                    if (data.preferences) {
+                        setPreferences({
+                            emailAlerts: !!data.preferences.email_alerts,
+                            pushNotifications: !!data.preferences.push_notifications,
+                            weeklyDigest: !!data.preferences.weekly_digest,
+                            darkMode: data.preferences.dark_mode !== false,
+                        });
+                    }
                 }
             } catch (error) {
                 console.error("Failed to load profile", error);
@@ -40,16 +58,44 @@ export default function ProfilePage() {
         fetchProfile();
     }, []);
 
-    const [preferences, setPreferences] = useState({
-        emailAlerts: true,
-        pushNotifications: false,
-        weeklyDigest: true,
-        darkMode: true,
-    });
-
-    const handleSave = () => {
+    const handleSave = async () => {
         setIsEditing(false);
-        // Ideally, we'd trigger a toast notification here or an API call
+        try {
+            const { apiPatch } = await import("@/lib/api");
+            await apiPatch("/auth/me", {
+                name: profile.firstName,
+                last_name: profile.lastName,
+                role: profile.role,
+                bio: profile.bio
+            });
+            showToast("Profile saved successfully");
+        } catch (error) {
+            console.error("Failed to save profile", error);
+            showToast("Failed to save profile");
+        }
+    };
+
+    const updatePreference = async (key: keyof typeof preferences, value: boolean) => {
+        if (!isEditing) return;
+
+        const newPrefs = { ...preferences, [key]: value };
+        setPreferences(newPrefs);
+
+        try {
+            const { apiPatch } = await import("@/lib/api");
+            await apiPatch("/auth/preferences", {
+                email_alerts: newPrefs.emailAlerts,
+                push_notifications: newPrefs.pushNotifications,
+                weekly_digest: newPrefs.weeklyDigest,
+                dark_mode: newPrefs.darkMode,
+            });
+            showToast("Preferences updated");
+        } catch (error) {
+            console.error("Failed to update preferences", error);
+            showToast("Failed to update preferences");
+            // Revert on error
+            setPreferences(preferences);
+        }
     };
 
     return (
@@ -198,7 +244,7 @@ export default function ProfilePage() {
                                     className="hidden"
                                     disabled={!isEditing}
                                     checked={preferences.emailAlerts}
-                                    onChange={(e) => isEditing && setPreferences({ ...preferences, emailAlerts: !preferences.emailAlerts })}
+                                    onChange={(e) => isEditing && updatePreference('emailAlerts', !preferences.emailAlerts)}
                                 />
                             </label>
 
@@ -215,7 +261,7 @@ export default function ProfilePage() {
                                     className="hidden"
                                     disabled={!isEditing}
                                     checked={preferences.pushNotifications}
-                                    onChange={(e) => isEditing && setPreferences({ ...preferences, pushNotifications: !preferences.pushNotifications })}
+                                    onChange={(e) => isEditing && updatePreference('pushNotifications', !preferences.pushNotifications)}
                                 />
                             </label>
 
@@ -232,7 +278,7 @@ export default function ProfilePage() {
                                     className="hidden"
                                     disabled={!isEditing}
                                     checked={preferences.weeklyDigest}
-                                    onChange={(e) => isEditing && setPreferences({ ...preferences, weeklyDigest: !preferences.weeklyDigest })}
+                                    onChange={(e) => isEditing && updatePreference('weeklyDigest', !preferences.weeklyDigest)}
                                 />
                             </label>
                         </div>
@@ -257,6 +303,20 @@ export default function ProfilePage() {
                     </div>
                 </div>
             </div>
+            {/* Toast Notification */}
+            {toastMessage && (
+                <motion.div
+                    initial={{ opacity: 0, y: 50, scale: 0.9 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                    className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 glass px-6 py-4 rounded-full flex items-center gap-3 shadow-[0_0_30px_rgba(6,182,212,0.3)] border border-accent-cyan/30"
+                >
+                    <div className="w-2 h-2 rounded-full bg-accent-cyan animate-pulse"></div>
+                    <p className="text-sm font-bold text-slate-100">
+                        {toastMessage}
+                    </p>
+                </motion.div>
+            )}
         </motion.div>
     );
 }
