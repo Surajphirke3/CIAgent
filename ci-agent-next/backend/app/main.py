@@ -82,12 +82,9 @@ app.add_middleware(
         settings.frontend_url, 
         "http://localhost:3000", 
         "http://127.0.0.1:3000",
-        "https://ci-agent-next.vercel.app",
-        "https://ci-agent-next-c1cps63zd-shrotmaurya-arts-projects.vercel.app",
-        "https://ci-agent-next-g9or8en9f-shrotmaurya-arts-projects.vercel.app",
-        "*"
+        "https://ci-agent-next.vercel.app"
     ],
-    allow_origin_regex=r"https?://localhost:\d+",
+    allow_origin_regex=r"https?://(localhost:\d+|.*\.vercel\.app)",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
