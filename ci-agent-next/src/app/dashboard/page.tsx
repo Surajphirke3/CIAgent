@@ -162,26 +162,9 @@ export default function DashboardPage() {
                                 <span className="text-pink-500 text-sm font-bold flex items-center gap-0.5 mb-1">Featured Insight</span>
                                 <h2 className="text-2xl font-bold text-slate-100">Intelligence Overview</h2>
                             </div>
-                            <div className="flex items-center gap-3">
-                                <button
-                                    onClick={async () => {
-                                        try {
-                                            await apiFetch("/reports/trigger-agent", { method: "POST" });
-                                            alert("Agent triggered successfully!");
-                                        } catch (err) {
-                                            alert("Failed to trigger agent: " + (err instanceof Error ? err.message : String(err)));
-                                        }
-                                    }}
-                                    className="px-4 py-2 bg-pink-500/20 text-pink-500 hover:bg-pink-500/30 rounded-lg text-sm font-bold transition-colors flex items-center gap-2"
-                                    title="Trigger External Agent"
-                                >
-                                    <span className="material-symbols-outlined text-sm">robot_2</span>
-                                    Trigger Agent
-                                </button>
-                                <button onClick={fetchData} className="p-2 bg-white/5 rounded-lg text-slate-400 hover:text-white transition-colors" title="Refresh Dashboard">
-                                    <span className={`material-symbols-outlined ${loading ? 'animate-spin' : ''}`}>refresh</span>
-                                </button>
-                            </div>
+                            <button onClick={fetchData} className="p-2 bg-white/5 rounded-lg text-slate-400 hover:text-white transition-colors" title="Refresh Dashboard">
+                                <span className={`material-symbols-outlined ${loading ? 'animate-spin' : ''}`}>refresh</span>
+                            </button>
                         </div>
                         {loading ? (
                             <div className="space-y-3">
