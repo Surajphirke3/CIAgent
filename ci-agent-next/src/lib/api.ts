@@ -41,7 +41,11 @@ export async function apiFetch<T>(
         let message = `HTTP ${res.status}`;
         try {
             const body = await res.json();
-            message = body?.detail ?? body?.message ?? message;
+            if (Array.isArray(body?.detail)) {
+                message = body.detail.map((e: any) => e.msg || String(e)).join(", ");
+            } else {
+                message = body?.detail ?? body?.message ?? message;
+            }
         } catch {
             if (res.status === 401) message = "Invalid or expired credentials";
             else if (res.status === 400) message = "Validation error";

@@ -5,7 +5,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.database import users_col
-from app.database import users_col
 from app.middleware.auth import get_current_user
 from app.models.user import TokenResponse, UserCreate, UserOut, UserUpdate, UserPreferencesUpdate, UserPreferences, ForgotPasswordRequest, ResetPasswordRequest
 from app.utils.hashing import hash_password, verify_password
@@ -25,6 +24,7 @@ def _doc_to_user_out(doc: dict) -> UserOut:
         bio=doc.get("bio"),
         preferences=UserPreferences(**doc.get("preferences", {})),
         created_at=doc["created_at"],
+        last_login=doc.get("last_login"),
     )
 
 
@@ -56,6 +56,12 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Incorrect email or password",
         )
+
+    # Stamp last_login timestamp
+    await users_col.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"last_login": datetime.utcnow()}}
+    )
 
     access_token = create_access_token(str(user["_id"]))
     return TokenResponse(access_token=access_token)

@@ -11,6 +11,13 @@ class DiffItem(BaseModel):
     change_type: str  # added | removed | modified
 
 
+class CompetitorInsight(BaseModel):
+    name: str
+    key_changes: List[str]
+    strategic_implications: str
+    risk_level: str
+
+
 class Report(BaseModel):
     id: str
     competitor_id: str
@@ -20,6 +27,17 @@ class Report(BaseModel):
     diffs: List[DiffItem]
     ai_summary: str
     severity: str  # low | medium | high
+    
+    # AI Enriched Strategic Fields
+    report_type: str = "competitor_profile"
+    competitors_included: List[str] = []
+    executive_summary: str = ""
+    strategic_insights: List[str] = []
+    recommendations: List[str] = []
+    market_trend: str = ""
+    competitor_insights: List[CompetitorInsight] = []
+    overall_risk_level: str = "low"
+
     notified: bool = False
     read: bool = False
 

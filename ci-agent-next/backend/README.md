@@ -34,7 +34,7 @@ Copy-Item .env.example .env
 # From inside ci-agent-next/backend/
 uvicorn app.main:app --reload --port 8000
 ```
-
+ 
 - API root:    http://localhost:8000
 - Health:      http://localhost:8000/health
 - Swagger UI:  http://localhost:8000/docs

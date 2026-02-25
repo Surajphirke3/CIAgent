@@ -2,6 +2,7 @@
 import { motion } from "framer-motion";
 import { useEffect, useState, useCallback } from "react";
 import { apiFetch, ApiError } from "@/lib/api";
+import { timeAgo, formatDate } from "@/lib/time";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Competitor {
@@ -22,20 +23,16 @@ interface Report {
     diffs: { section: string; change_type: string }[];
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-function timeAgo(dateStr: string | null): string {
-    if (!dateStr) return "Never";
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 60) return `${mins}m ago`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    return `${Math.floor(hrs / 24)}d ago`;
+interface Signal {
+    id: string;
+    competitor_name: string;
+    type: string;
+    impact_level: "high" | "medium" | "low";
+    detected_at: string;
 }
 
-function formatDate(iso: string) {
-    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 
 function severityColor(s: string) {
     if (s === "high") return "text-pink-500";
@@ -80,17 +77,20 @@ function StatCard({ label, value, sub, color, barWidth, loading }: {
 export default function DashboardPage() {
     const [competitors, setCompetitors] = useState<Competitor[]>([]);
     const [reports, setReports] = useState<Report[]>([]);
+    const [signals, setSignals] = useState<Signal[]>([]);
     const [loading, setLoading] = useState(true);
 
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
-            const [comps, reps] = await Promise.all([
+            const [comps, reps, sigs] = await Promise.all([
                 apiFetch<Competitor[]>("/competitors/"),
                 apiFetch<Report[]>("/reports/"),
+                apiFetch<Signal[]>("/signals/"),
             ]);
             setCompetitors(comps);
             setReports(reps);
+            setSignals(sigs);
         } catch (err) {
             // Silently fall back — dashboard still renders with empty data
             console.warn("Dashboard fetch error:", err instanceof ApiError ? err.message : err);
@@ -110,21 +110,22 @@ export default function DashboardPage() {
         .filter(Boolean)
         .sort((a, b) => new Date(b!).getTime() - new Date(a!).getTime())[0] ?? null;
 
-    // ── Recent "signals" = last 5 reports mapped to signal rows ───────────────
-    const signals = reports.slice(0, 5).map(r => {
-        let pseudoType = "Web Update";
-        if (r.ai_summary.toLowerCase().includes("pricin")) pseudoType = "Pricing";
-        else if (r.ai_summary.toLowerCase().includes("hir") || r.ai_summary.toLowerCase().includes("job")) pseudoType = "Hiring";
-        else if (r.ai_summary.toLowerCase().includes("feature") || r.ai_summary.toLowerCase().includes("launch")) pseudoType = "Launch";
+    // ── Recent signals = last 5 real signals ───────────────
+    const recentSignals = signals.slice(0, 5).map(s => {
+        const typeLabels: Record<string, string> = {
+            pricing: "Pricing", hiring: "Hiring", tech: "Tech/IP",
+            acquisition: "M&A", launch: "Launch", web_update: "Web Update"
+        };
+        const typeLabel = typeLabels[s.type] || s.type;
 
         return {
-            id: r.id,
-            initials: r.competitor_name.slice(0, 2).toUpperCase(),
-            name: r.competitor_name,
-            type: pseudoType,
-            impact: r.severity === "high" ? "High" : r.severity === "medium" ? "Med" : "Low",
-            impactColor: severityColor(r.severity),
-            time: timeAgo(r.created_at),
+            id: s.id,
+            initials: s.competitor_name.slice(0, 2).toUpperCase(),
+            name: s.competitor_name,
+            type: typeLabel,
+            impact: s.impact_level === "high" ? "High" : s.impact_level === "medium" ? "Med" : "Low",
+            impactColor: severityColor(s.impact_level),
+            time: timeAgo(s.detected_at),
         };
     });
 
@@ -161,8 +162,8 @@ export default function DashboardPage() {
                                 <span className="text-pink-500 text-sm font-bold flex items-center gap-0.5 mb-1">Featured Insight</span>
                                 <h2 className="text-2xl font-bold text-slate-100">Intelligence Overview</h2>
                             </div>
-                            <button className="p-2 bg-white/5 rounded-lg text-slate-400 hover:text-white transition-colors">
-                                <span className="material-symbols-outlined">refresh</span>
+                            <button onClick={fetchData} className="p-2 bg-white/5 rounded-lg text-slate-400 hover:text-white transition-colors" title="Refresh Dashboard">
+                                <span className={`material-symbols-outlined ${loading ? 'animate-spin' : ''}`}>refresh</span>
                             </button>
                         </div>
                         {loading ? (
@@ -209,7 +210,7 @@ export default function DashboardPage() {
                             <div className="p-6 space-y-4">
                                 {[...Array(3)].map((_, i) => <div key={i} className="h-10 bg-white/5 rounded animate-pulse"></div>)}
                             </div>
-                        ) : signals.length > 0 ? (
+                        ) : recentSignals.length > 0 ? (
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left">
                                     <thead>
@@ -222,7 +223,7 @@ export default function DashboardPage() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-white/5">
-                                        {signals.map((s, i) => (
+                                        {recentSignals.map((s, i) => (
                                             <tr key={i} className="hover:bg-white/5 transition-colors group cursor-pointer">
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center gap-3">

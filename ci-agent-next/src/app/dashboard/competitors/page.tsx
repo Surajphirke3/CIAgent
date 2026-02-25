@@ -2,6 +2,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect, useCallback } from "react";
 import { apiFetch, apiPost, apiDelete, ApiError } from "@/lib/api";
+import { timeAgo } from "@/lib/time";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Competitor {
@@ -18,21 +19,28 @@ interface Competitor {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-function getThreat(tags: string[]): { level: string; color: string } {
-    if (tags.includes("high")) return { level: "High", color: "pink-500" };
-    if (tags.includes("medium")) return { level: "Med", color: "yellow-500" };
-    return { level: "Low", color: "secondary" };
+function getThreatClasses(tags: string[]): { level: string; badgeClass: string; dotClass: string; textClass: string } {
+    if (tags.includes("high")) return {
+        level: "High",
+        badgeClass: "bg-pink-500/10 border-pink-500/20",
+        dotClass: "bg-pink-500",
+        textClass: "text-pink-500",
+    };
+    if (tags.includes("medium")) return {
+        level: "Med",
+        badgeClass: "bg-yellow-500/10 border-yellow-500/20",
+        dotClass: "bg-yellow-500",
+        textClass: "text-yellow-500",
+    };
+    return {
+        level: "Low",
+        badgeClass: "bg-secondary/10 border-secondary/20",
+        dotClass: "bg-secondary",
+        textClass: "text-secondary",
+    };
 }
 
-function timeAgo(dateStr: string | null): string {
-    if (!dateStr) return "Never";
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 60) return `${mins}m ago`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    return `${Math.floor(hrs / 24)}d ago`;
-}
+
 
 // ─── Add Competitor Modal ──────────────────────────────────────────────────────
 function AddCompetitorModal({
@@ -355,7 +363,7 @@ export default function CompetitorsPage() {
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <AnimatePresence>
                             {filtered.map((comp) => {
-                                const threat = getThreat(comp.tags);
+                                const threat = getThreatClasses(comp.tags);
                                 return (
                                     <motion.div
                                         key={comp.id}
@@ -377,9 +385,9 @@ export default function CompetitorsPage() {
                                                     <p className="text-xs text-slate-400 mt-0.5 truncate max-w-[200px]">{comp.url}</p>
                                                 </div>
                                             </div>
-                                            <div className={`px-3 py-1 rounded-full bg-${threat.color}/10 border border-${threat.color}/20 flex items-center gap-1.5`}>
-                                                <span className={`w-2 h-2 rounded-full bg-${threat.color} animate-pulse`}></span>
-                                                <span className={`text-xs font-bold text-${threat.color} uppercase tracking-wider`}>{threat.level} Threat</span>
+                                            <div className={`px-3 py-1 rounded-full ${threat.badgeClass} border flex items-center gap-1.5`}>
+                                                <span className={`w-2 h-2 rounded-full ${threat.dotClass} animate-pulse`}></span>
+                                                <span className={`text-xs font-bold ${threat.textClass} uppercase tracking-wider`}>{threat.level} Threat</span>
                                             </div>
                                         </div>
 

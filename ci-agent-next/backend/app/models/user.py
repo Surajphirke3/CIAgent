@@ -54,6 +54,7 @@ class UserOut(BaseModel):
     bio: Optional[str] = None
     preferences: UserPreferences
     created_at: datetime
+    last_login: Optional[datetime] = None
 
 
 class TokenResponse(BaseModel):

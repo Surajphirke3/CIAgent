@@ -140,11 +140,50 @@ export default function LoginPage() {
         setErrors({});
         setIsLoading(true);
 
-        // Demo mode: skip backend check, just navigate
-        setTimeout(() => {
+        try {
+            const formData = new URLSearchParams();
+            formData.append("username", "demo@ciagent.com");
+            formData.append("password", "demo123!");
+
+            let res = await fetch(`${BASE_URL}/auth/login`, {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: formData.toString(),
+            });
+
+            // If it fails, auto-register the demo user
+            if (!res.ok) {
+                const regRes = await fetch(`${BASE_URL}/auth/register`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        email: "demo@ciagent.com",
+                        password: "demo123!",
+                        name: "Demo User"
+                    }),
+                });
+
+                if (regRes.ok) {
+                    res = await fetch(`${BASE_URL}/auth/login`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                        body: formData.toString(),
+                    });
+                }
+            }
+
+            if (res.ok) {
+                const data = await res.json() as { access_token: string };
+                setToken(data.access_token);
+                router.push("/dashboard");
+            } else {
+                setErrors({ general: "Failed to access demo account." });
+            }
+        } catch (err) {
+            setErrors({ general: "Unable to reach the server." });
+        } finally {
             setIsLoading(false);
-            router.push("/dashboard");
-        }, 500);
+        }
     };
 
     return (
