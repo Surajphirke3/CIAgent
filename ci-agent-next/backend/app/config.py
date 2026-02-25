@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     gmail_user: str
     gmail_app_password: str
     slack_webhook_url: str
+    n8n_webhook_url: str = ""
     frontend_url: str = "http://localhost:3000"
 
     class Config:

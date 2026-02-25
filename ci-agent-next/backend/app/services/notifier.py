@@ -113,6 +113,31 @@ async def send_slack_alert(report: Report) -> bool:
         return False
 
 
+# ── n8n Agent ─────────────────────────────────────────────────────────────────
+
+async def trigger_n8n_agent(action: str, data: dict) -> bool:
+    """Trigger the provided n8n webhook with specific action and data payload."""
+    webhook_url = settings.n8n_webhook_url
+    if not webhook_url:
+        logger.warning("n8n webhook URL not configured — skipping agent trigger.")
+        return False
+
+    payload = {
+        "action": action,
+        "data": data,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(webhook_url, json=payload)
+            resp.raise_for_status()
+        logger.info(f"n8n logic triggered successfully for action '{action}'")
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.error(f"n8n webhook FAILED for action '{action}': {exc}")
+        return False
+
+
 # ── Weekly Digest ─────────────────────────────────────────────────────────────
 
 async def send_weekly_digest(to_email: str, competitor_summaries: list[dict]) -> bool:

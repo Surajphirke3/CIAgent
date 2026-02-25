@@ -8,6 +8,7 @@ from app.database import competitors_col, reports_col, scan_logs_col, signals_co
 from app.middleware.auth import get_current_user
 from app.models.report import Report
 from app.services.ai_analyzer import generate_strategic_report
+from app.services.notifier import trigger_n8n_agent
 
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -252,3 +253,29 @@ async def mark_all_reports_read(current_user=Depends(get_current_user)):
         {"$set": {"read": True}},
     )
     return None
+
+
+# ── Trigger n8n Agent ─────────────────────────────────────────────────────────
+
+@router.post("/trigger-agent", status_code=status.HTTP_200_OK)
+async def trigger_agent_manually(
+    payload: Dict[str, Any] = Body(...),
+    current_user=Depends(get_current_user),
+):
+    """
+    Manually trigger the n8n agent workflow from the dashboard.
+    """
+    action = payload.get("action", "manual_trigger")
+    data = payload.get("data", {})
+    
+    # Inject user info
+    data["user_email"] = current_user.get("email")
+    
+    success = await trigger_n8n_agent(action, data)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to trigger the n8n agent. Make sure the webhook URL is configured.",
+        )
+        
+    return {"ok": True, "message": f"Agent triggered successfully for '{action}'"}

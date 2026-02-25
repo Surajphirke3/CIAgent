@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 
 from app.database import competitors_col
 from app.middleware.auth import get_current_user
@@ -46,7 +46,7 @@ async def get_competitor(competitor_id: str, current_user=Depends(get_current_us
 
 @router.post("/", response_model=CompetitorOut, status_code=status.HTTP_201_CREATED)
 async def create_competitor(
-    payload: CompetitorCreate, current_user=Depends(get_current_user)
+    payload: CompetitorCreate, background_tasks: BackgroundTasks, current_user=Depends(get_current_user)
 ):
     doc = {
         **payload.model_dump(mode="json"),
@@ -57,6 +57,11 @@ async def create_competitor(
     }
     result = await competitors_col.insert_one(doc)
     doc["_id"] = result.inserted_id
+
+    # Trigger n8n webhook asynchronously
+    from app.services.notifier import trigger_n8n_agent
+    background_tasks.add_task(trigger_n8n_agent, "competitor_added", {"competitor_name": payload.name, "url": payload.url})
+
     return _doc_to_out(doc)
 
 
